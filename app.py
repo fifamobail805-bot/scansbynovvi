@@ -2,49 +2,49 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from mplsoccer import Radar, grid
+from mplsoccer import Radar, FontManager, grid
 import io
 import warnings
 
-# Отключаем предупреждения
+# Disable warnings
 warnings.filterwarnings("ignore")
 
-# --- НАСТРОЙКИ СТРАНИЦЫ ---
+# --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="NovviGodly Radar Pro", layout="wide", page_icon="⚽")
 
-# --- ШРИФТЫ (СИСТЕМНЫЕ) ---
-# Используем Arial или Helvetica, они есть везде и выглядят профессионально
+# --- FONTS (SYSTEM DEFAULT) ---
+# Keeping it simple with system fonts to avoid loading errors
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
 
-# --- SIDEBAR: НАСТРОЙКИ ---
+# --- SIDEBAR: SETTINGS ---
 with st.sidebar:
-    st.header("1. Детали игрока")
-    player_name = st.text_input("Имя Игрока", "Bruno Fernandes")
-    team_name = st.text_input("Команда", "Manchester United")
-    position_name = st.text_input("Позиция / Роль", "Midfielder")
-    details_text = st.text_input("Детали (Мин/Возраст)", "1,272 minutes - 26 years")
+    st.header("1. Player Details")
+    player_name = st.text_input("Player Name", "Bruno Fernandes")
+    team_name = st.text_input("Team Name", "Manchester United")
+    position_name = st.text_input("Position / Role", "Midfielder")
+    details_text = st.text_input("Extra Details (Mins/Age)", "1,272 minutes - 26 years")
 
     st.divider()
     
-    st.header("2. Визуал")
+    st.header("2. Visual Settings")
     
-    st.subheader("🎨 Цвета")
-    radar_face_color = st.color_picker("Заливка Радара", "#d0667a")
-    radar_ring_color = st.color_picker("Цвет Колец", "#1d537f")
-    text_name_color = st.color_picker("Цвет Имени", "#e4dded")
-    text_team_color = st.color_picker("Цвет Команды", "#cc2a3f")
+    st.subheader("🎨 Colors")
+    radar_face_color = st.color_picker("Radar Fill Color", "#d0667a")
+    radar_ring_color = st.color_picker("Inner Rings Color", "#1d537f")
+    text_name_color = st.color_picker("Player Name Color", "#e4dded")
+    text_team_color = st.color_picker("Team Name Color", "#cc2a3f")
     
-    st.subheader("📏 Размеры Шрифтов")
-    name_size = st.slider("Размер Имени", 20, 60, 35)
-    team_size = st.slider("Размер Команды", 15, 40, 25)
-    watermark_size = st.slider("Размер Вотермарки", 20, 80, 35)
+    st.subheader("📏 Font Sizes")
+    name_size = st.slider("Name Font Size", 20, 60, 35)
+    team_size = st.slider("Team Font Size", 15, 40, 25)
+    watermark_size = st.slider("Watermark Size", 20, 80, 35)
 
-# --- ОСНОВНОЕ ОКНО ---
+# --- MAIN AREA: DATA INPUT ---
 st.title("⚽ NovviGodly Radar Generator (p90)")
-st.caption("Введите статистику p90. Low и High — это границы осей (минимум и максимум для сравнения).")
+st.markdown("Enter **per 90** statistics. **Low** and **High** define the minimum and maximum boundaries of the chart axis.")
 
-# Данные по умолчанию
+# Default data structure
 default_data = [
     {"Metric": "Progressive Passing", "Value": 8.5, "Low": 0.0, "High": 10.0},
     {"Metric": "xG Shot Creation", "Value": 0.45, "Low": 0.0, "High": 0.8},
@@ -64,84 +64,95 @@ default_data = [
 df_input = pd.DataFrame(default_data)
 edited_df = st.data_editor(df_input, num_rows="dynamic", use_container_width=True)
 
-# --- ФУНКЦИЯ ОТРИСОВКИ ---
+# --- PLOTTING LOGIC ---
 def plot_radar(df):
+    # Extract lists from DataFrame
     params = df["Metric"].tolist()
     values = df["Value"].tolist()
     low = df["Low"].tolist()
     high = df["High"].tolist()
 
+    # Create Radar Object
     radar = Radar(params, low, high,
-                  round_int=[False]*len(params),
+                  round_int=[False]*len(params), # Allow floats for p90
                   num_rings=4, 
                   ring_width=1, 
                   center_circle_radius=1)
 
+    # Setup Grid
     fig, axs = grid(figheight=14, grid_height=0.915, title_height=0.06, endnote_height=0.025,
                     title_space=0, endnote_space=0, grid_key='radar', axis=False)
     
-    fig.set_facecolor('#121212')
+    fig.set_facecolor('#121212') # Dark background
 
+    # Radar Axis
     radar.setup_axis(ax=axs['radar'], facecolor='None')
+    
+    # Inner Rings
     radar.draw_circles(ax=axs['radar'], facecolor='#28252c', edgecolor='#39353f', lw=1.5)
 
+    # Main Radar Plot
     radar.draw_radar(values, ax=axs['radar'],
                      kwargs_radar={'facecolor': radar_face_color, 'alpha': 0.7},
                      kwargs_rings={'facecolor': radar_ring_color, 'alpha': 0.6})
 
-    # Подписи осей и метрик (стандартный жирный шрифт)
+    # Labels
+    # Range labels (axis numbers)
     radar.draw_range_labels(ax=axs['radar'], fontsize=12, color='#fcfcfc', fontweight='bold')
+    
+    # Param labels (metric names)
     radar.draw_param_labels(ax=axs['radar'], fontsize=18, color='#fcfcfc', fontweight='bold')
 
-    # --- ТЕКСТА ---
+    # --- TITLES & TEXT ---
     
-    # 1. Имя
+    # 1. Player Name
     axs['title'].text(0.01, 0.75, player_name, fontsize=name_size,
                       ha='left', va='center', color=text_name_color, fontweight='bold')
     
-    # 2. Команда
+    # 2. Team Name
     axs['title'].text(0.01, 0.20, team_name, fontsize=team_size,
                       ha='left', va='center', color=text_team_color)
     
-    # 3. Заголовок справа
+    # 3. Chart Title (Right side)
     axs['title'].text(0.99, 0.75, 'Statistical Radar', fontsize=25,
                       ha='right', va='center', color='#e4dded', fontweight='bold')
     
-    # 4. Детали справа
+    # 4. Details / Position (Right side)
     axs['title'].text(0.99, 0.20, f"{position_name}\n{details_text}", fontsize=15,
                       ha='right', va='center', color=text_team_color)
 
-    # 5. Вотермарка (Слева внизу)
+    # --- WATERMARK ---
     axs['endnote'].text(0.01, 0.5, 'NovviGodly', 
                         color='#fcfcfc', fontsize=watermark_size, 
                         ha='left', va='center', weight='bold')
 
-    # 6. Кредитс (Справа внизу)
+    # --- CREDITS ---
     axs['endnote'].text(0.99, 0.5, 'Data: p90',
                         color='#fcfcfc', fontsize=26, ha='right', va='center')
 
     return fig
 
-# --- ВЫВОД ---
+# --- RENDER ---
 st.divider()
 
-# Центрирование через колонки
+# Centering using columns
 left_co, cent_co, last_co = st.columns([1, 2, 1])
 
 with cent_co:
     if st.button("Generate Radar", type="primary", use_container_width=True):
         if len(edited_df) < 3:
-            st.error("Минимум 3 метрики нужно для радара!")
+            st.error("Please add at least 3 metrics to generate a radar.")
         else:
             fig = plot_radar(edited_df)
             st.pyplot(fig)
 
+            # Download
             buf = io.BytesIO()
             fig.savefig(buf, format="png", bbox_inches='tight', facecolor='#121212', dpi=300)
             st.download_button(
-                label="Скачать HD (PNG)",
+                label="Download HD Image (PNG)",
                 data=buf.getvalue(),
-                file_name=f"{player_name}_NovviGodly.png",
+                file_name=f"{player_name}_NovviGodly_Radar.png",
                 mime="image/png",
                 use_container_width=True
             )
